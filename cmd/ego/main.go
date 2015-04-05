@@ -3,16 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/tav/ego"
 	"go/scanner"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
-
-	"github.com/benbjohnson/ego"
 )
 
 func main() {
+	minify := flag.Bool("minify", false, "produce minified output")
 	outfile := flag.String("o", "ego.go", "output file")
 	pkgname := flag.String("package", "", "package name")
 	flag.Parse()
@@ -64,7 +64,7 @@ func main() {
 	defer f.Close()
 
 	// Write template to file.
-	if err := p.Write(f); err != nil {
+	if err := p.Write(f, *minify); err != nil {
 		log.Fatal("write: ", err)
 	}
 }

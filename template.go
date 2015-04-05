@@ -21,7 +21,7 @@ type Template struct {
 }
 
 // Write writes the template to a writer.
-func (t *Template) Write(w io.Writer) error {
+func (t *Template) Write(w io.Writer, minify bool) error {
 	var buf bytes.Buffer
 
 	decl := t.declarationBlock()
@@ -30,11 +30,11 @@ func (t *Template) Write(w io.Writer) error {
 	}
 
 	// Write function declaration.
-	decl.write(&buf)
+	decl.write(&buf, minify)
 
 	// Write non-header blocks.
 	for _, b := range t.nonHeaderBlocks() {
-		if err := b.write(&buf); err != nil {
+		if err := b.write(&buf, minify); err != nil {
 			return err
 		}
 	}
@@ -95,7 +95,7 @@ func (t *Template) normalize() {
 // Block represents an element of the template.
 type Block interface {
 	block()
-	write(*bytes.Buffer) error
+	write(*bytes.Buffer, bool) error
 }
 
 func (b *DeclarationBlock) block() {}
@@ -110,8 +110,10 @@ type DeclarationBlock struct {
 	Content string
 }
 
-func (b *DeclarationBlock) write(buf *bytes.Buffer) error {
-	b.Pos.write(buf)
+func (b *DeclarationBlock) write(buf *bytes.Buffer, minify bool) error {
+	if !minify {
+		b.Pos.write(buf)
+	}
 	fmt.Fprintf(buf, "%s {\n", b.Content)
 	return nil
 }
@@ -122,9 +124,13 @@ type TextBlock struct {
 	Content string
 }
 
-func (b *TextBlock) write(buf *bytes.Buffer) error {
-	b.Pos.write(buf)
-	fmt.Fprintf(buf, `_, _ = fmt.Fprint(w, %q)`+"\n", b.Content)
+func (b *TextBlock) write(buf *bytes.Buffer, minify bool) error {
+	if minify {
+		fmt.Fprintf(buf, `fmt.Fprint(w, %q)`+"\n", b.Content)
+	} else {
+		b.Pos.write(buf)
+		fmt.Fprintf(buf, `_, _ = fmt.Fprint(w, %q)`+"\n", b.Content)
+	}
 	return nil
 }
 
@@ -140,8 +146,10 @@ type CodeBlock struct {
 	Content string
 }
 
-func (b *CodeBlock) write(buf *bytes.Buffer) error {
-	b.Pos.write(buf)
+func (b *CodeBlock) write(buf *bytes.Buffer, minify bool) error {
+	if !minify {
+		b.Pos.write(buf)
+	}
 	fmt.Fprintln(buf, b.Content)
 	return nil
 }
@@ -152,8 +160,10 @@ type HeaderBlock struct {
 	Content string
 }
 
-func (b *HeaderBlock) write(buf *bytes.Buffer) error {
-	b.Pos.write(buf)
+func (b *HeaderBlock) write(buf *bytes.Buffer, minify bool) error {
+	if !minify {
+		b.Pos.write(buf)
+	}
 	fmt.Fprintln(buf, b.Content)
 	return nil
 }
@@ -164,9 +174,13 @@ type PrintBlock struct {
 	Content string
 }
 
-func (b *PrintBlock) write(buf *bytes.Buffer) error {
-	b.Pos.write(buf)
-	fmt.Fprintf(buf, `_, _ = fmt.Fprintf(w, "%%v", %s)`+"\n", b.Content)
+func (b *PrintBlock) write(buf *bytes.Buffer, minify bool) error {
+	if minify {
+		fmt.Fprintf(buf, `fmt.Fprintf(w, "%%v", %s)`+"\n", b.Content)
+	} else {
+		b.Pos.write(buf)
+		fmt.Fprintf(buf, `_, _ = fmt.Fprintf(w, "%%v", %s)`+"\n", b.Content)
+	}
 	return nil
 }
 
@@ -189,13 +203,13 @@ type Package struct {
 }
 
 // Write writes out the package header and templates to a writer.
-func (p *Package) Write(w io.Writer) error {
-	if err := p.writeHeader(w); err != nil {
+func (p *Package) Write(w io.Writer, minify bool) error {
+	if err := p.writeHeader(w, minify); err != nil {
 		return err
 	}
 
 	for _, t := range p.Templates {
-		if err := t.Write(w); err != nil {
+		if err := t.Write(w, minify); err != nil {
 			return fmt.Errorf("template: %s: err", t.Path)
 		}
 	}
@@ -204,7 +218,7 @@ func (p *Package) Write(w io.Writer) error {
 }
 
 // Writes the package name and consolidated header blocks.
-func (p *Package) writeHeader(w io.Writer) error {
+func (p *Package) writeHeader(w io.Writer, minify bool) error {
 	if p.Name == "" {
 		return errors.New("package name required")
 	}
@@ -214,7 +228,7 @@ func (p *Package) writeHeader(w io.Writer) error {
 	fmt.Fprintf(&buf, "package %s\n", p.Name)
 	for _, t := range p.Templates {
 		for _, b := range t.headerBlocks() {
-			b.write(&buf)
+			b.write(&buf, minify)
 		}
 	}
 
