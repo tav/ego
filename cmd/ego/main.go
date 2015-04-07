@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-	minify := flag.Bool("minify", false, "produce minified output")
 	outfile := flag.String("o", "ego.go", "output file")
 	pkgname := flag.String("package", "", "package name")
 	flag.Parse()
@@ -64,7 +63,7 @@ func main() {
 	defer f.Close()
 
 	// Write template to file.
-	if err := p.Write(f, *minify); err != nil {
+	if err := p.Write(f); err != nil {
 		log.Fatal("write: ", err)
 	}
 }
