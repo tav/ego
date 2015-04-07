@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"strings"
 )
 
 // Scanner is a tokenizer for Ego templates.
@@ -60,8 +61,6 @@ func (s *Scanner) scanCodeBlock() (Block, error) {
 	switch ch {
 	case '!':
 		return s.scanDeclarationBlock()
-	case '%':
-		return s.scanHeaderBlock()
 	case '=':
 		return s.scanPrintBlock()
 	case '-':
@@ -81,21 +80,17 @@ func (s *Scanner) scanCodeBlock() (Block, error) {
 }
 
 func (s *Scanner) scanDeclarationBlock() (Block, error) {
-	b := &DeclarationBlock{Pos: s.pos}
+	pos := s.pos
 	content, err := s.scanContent()
 	if err != nil {
 		return nil, err
 	}
-	b.Content = content
-	return b, nil
-}
-
-func (s *Scanner) scanHeaderBlock() (Block, error) {
-	b := &HeaderBlock{Pos: s.pos}
-	content, err := s.scanHeaderContent()
-	if err != nil {
-		return nil, err
+	if strings.HasPrefix(strings.TrimSpace(content), "import ") {
+		b := &HeaderBlock{Pos: pos}
+		b.Content = content
+		return b, nil
 	}
+	b := &DeclarationBlock{Pos: pos}
 	b.Content = content
 	return b, nil
 }

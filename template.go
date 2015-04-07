@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -155,7 +156,12 @@ type TextBlock struct {
 }
 
 func (b *TextBlock) write(buf *bytes.Buffer) error {
-	fmt.Fprintf(buf, "// %q\n", b.Content)
+	if b.Content == "" {
+		return nil
+	}
+	text := strconv.QuoteToASCII(b.Content)
+	text = strings.Replace(text[1:len(text)-1], `\n`, "\n\t// ", -1)
+	fmt.Fprintf(buf, "// %s\n", text)
 	fmt.Fprintf(buf, "w.Write(__%d)\n", b.ID)
 	return nil
 }
@@ -232,11 +238,14 @@ func (p *Package) Write(w io.Writer) error {
 	if err := p.writeHeader(w); err != nil {
 		return err
 	}
-
 	id := 0
 	texts := map[string]int{}
 	for _, t := range p.Templates {
 		for _, b := range t.textBlocks() {
+			b.Content = strings.TrimRight(strings.TrimLeft(b.Content, "\n "), "\n")
+			if b.Content == "" {
+				continue
+			}
 			if curID, exists := texts[b.Content]; exists {
 				b.ID = curID
 			} else {
@@ -253,13 +262,11 @@ func (p *Package) Write(w io.Writer) error {
 	if id != 0 {
 		fmt.Fprint(w, ")\n\n")
 	}
-
 	for _, t := range p.Templates {
 		if err := t.Write(w); err != nil {
 			return fmt.Errorf("template: %s: err", t.Path)
 		}
 	}
-
 	return nil
 }
 
