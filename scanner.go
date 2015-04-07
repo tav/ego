@@ -64,6 +64,8 @@ func (s *Scanner) scanCodeBlock() (Block, error) {
 		return s.scanHeaderBlock()
 	case '=':
 		return s.scanPrintBlock()
+	case '-':
+		return s.scanWriteBlock()
 	}
 
 	// Otherwise read the contents of the code block.
@@ -100,6 +102,16 @@ func (s *Scanner) scanHeaderBlock() (Block, error) {
 
 func (s *Scanner) scanPrintBlock() (Block, error) {
 	b := &PrintBlock{Pos: s.pos}
+	content, err := s.scanContent()
+	if err != nil {
+		return nil, err
+	}
+	b.Content = content
+	return b, nil
+}
+
+func (s *Scanner) scanWriteBlock() (Block, error) {
+	b := &WriteBlock{Pos: s.pos}
 	content, err := s.scanContent()
 	if err != nil {
 		return nil, err

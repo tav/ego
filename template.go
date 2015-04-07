@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -39,8 +40,28 @@ func (t *Template) Write(w io.Writer, minify bool) error {
 		}
 	}
 
-	// Write return and function closing brace.
-	fmt.Fprint(&buf, "return nil\n")
+	// Write function closing brace.
+	fmt.Fprint(&buf, "}\n\n")
+
+	split := strings.SplitN(strings.TrimSpace(decl.Content), "(", 2)
+	fname := strings.TrimSpace(strings.SplitN(split[0], "func ", 2)[1])
+	argList := strings.Split(split[1][:len(split[1])-1], ",")
+	args := ""
+	argNames := ""
+
+	if len(argList) != 1 {
+		params := []string{}
+		for _, param := range argList[1:] {
+			params = append(params, strings.Split(strings.TrimSpace(param), " ")[0])
+		}
+		args = strings.Join(argList[1:], ",")
+		argNames = strings.Join(params, ",")
+	}
+
+	fmt.Fprintf(&buf, "func Render%s (%s) []byte {\n", fname, args)
+	fmt.Fprint(&buf, "__buf := &bytes.Buffer{}\n")
+	fmt.Fprintf(&buf, "%s(__buf, %s)\n", fname, argNames)
+	fmt.Fprint(&buf, "return __buf.Bytes()\n")
 	fmt.Fprint(&buf, "}\n")
 
 	// Write code to external writer.
@@ -103,6 +124,7 @@ func (b *TextBlock) block()        {}
 func (b *CodeBlock) block()        {}
 func (b *HeaderBlock) block()      {}
 func (b *PrintBlock) block()       {}
+func (b *WriteBlock) block()       {}
 
 // DeclarationBlock represents a block that declaration the function signature.
 type DeclarationBlock struct {
@@ -126,10 +148,10 @@ type TextBlock struct {
 
 func (b *TextBlock) write(buf *bytes.Buffer, minify bool) error {
 	if minify {
-		fmt.Fprintf(buf, `fmt.Fprint(w, %q)`+"\n", b.Content)
+		fmt.Fprintf(buf, "w.Write([]byte(%q))\n", b.Content)
 	} else {
 		b.Pos.write(buf)
-		fmt.Fprintf(buf, `_, _ = fmt.Fprint(w, %q)`+"\n", b.Content)
+		fmt.Fprintf(buf, "_, _ = w.Write([]byte(%q))\n", b.Content)
 	}
 	return nil
 }
@@ -176,10 +198,25 @@ type PrintBlock struct {
 
 func (b *PrintBlock) write(buf *bytes.Buffer, minify bool) error {
 	if minify {
-		fmt.Fprintf(buf, `fmt.Fprintf(w, "%%v", %s)`+"\n", b.Content)
+		fmt.Fprintf(buf, "w.Write(Escape(%s))\n", b.Content)
 	} else {
 		b.Pos.write(buf)
 		fmt.Fprintf(buf, `_, _ = fmt.Fprintf(w, "%%v", %s)`+"\n", b.Content)
+	}
+	return nil
+}
+
+type WriteBlock struct {
+	Pos     Pos
+	Content string
+}
+
+func (b *WriteBlock) write(buf *bytes.Buffer, minify bool) error {
+	if minify {
+		fmt.Fprintf(buf, "w.Write(%s)\n", b.Content)
+	} else {
+		b.Pos.write(buf)
+		fmt.Fprintf(buf, "_, _ = w.Write(%s)\n", b.Content)
 	}
 	return nil
 }
@@ -250,7 +287,7 @@ func (p *Package) writeHeader(w io.Writer, minify bool) error {
 	// Write deduped imports.
 	var decls = map[string]bool{`:"fmt"`: true, `:"io"`: true}
 	fmt.Fprint(&buf, "import (\n")
-	fmt.Fprintln(&buf, `"fmt"`)
+	fmt.Fprintln(&buf, `"bytes"`)
 	fmt.Fprintln(&buf, `"io"`)
 	for _, d := range f.Decls {
 		d, ok := d.(*ast.GenDecl)
