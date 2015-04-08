@@ -46,23 +46,20 @@ func (t *Template) Write(w io.Writer) error {
 
 	split := strings.SplitN(strings.TrimSpace(decl.Content), "(", 2)
 	fname := strings.TrimSpace(strings.SplitN(split[0], "func ", 2)[1])
-	argList := strings.Split(split[1][:len(split[1])-1], ",")
-	args := ""
-	argNames := ""
+	args := split[1][:len(split[1])-1]
+	argList := strings.Split(args, ",")
 
-	if len(argList) != 1 {
-		params := []string{}
-		for _, param := range argList[1:] {
-			params = append(params, strings.Split(strings.TrimSpace(param), " ")[0])
-		}
-		args = strings.Join(argList[1:], ",")
-		argNames = strings.Join(params, ",")
+	params := []string{}
+	for _, param := range argList {
+		params = append(params, strings.Split(strings.TrimSpace(param), " ")[0])
 	}
+	argNames := strings.Join(params, ",")
 
 	fmt.Fprintf(buf, "func Render%s (%s) []byte {\n", fname, args)
-	fmt.Fprint(buf, "__buf := &bytes.Buffer{}\n")
-	fmt.Fprintf(buf, "%s(__buf, %s)\n", fname, argNames)
-	fmt.Fprint(buf, "return __buf.Bytes()\n")
+	fmt.Fprint(buf, "c.UseBuffer(true)\n")
+	fmt.Fprintf(buf, "%s(%s)\n", fname, argNames)
+	fmt.Fprint(buf, "c.UseBuffer(false)\n")
+	fmt.Fprint(buf, "return c.Buffer.Bytes()\n")
 	fmt.Fprint(buf, "}\n\n")
 
 	// Write code to external writer.
@@ -162,7 +159,7 @@ func (b *TextBlock) write(buf *bytes.Buffer) error {
 	text := strconv.QuoteToASCII(b.Content)
 	text = strings.Replace(text[1:len(text)-1], `\n`, "\n\t// ", -1)
 	fmt.Fprintf(buf, "// %s\n", text)
-	fmt.Fprintf(buf, "w.Write(__%d)\n", b.ID)
+	fmt.Fprintf(buf, "c.Write(__%d)\n", b.ID)
 	return nil
 }
 
@@ -201,7 +198,7 @@ type PrintBlock struct {
 }
 
 func (b *PrintBlock) write(buf *bytes.Buffer) error {
-	fmt.Fprintf(buf, "w.Write(Escape(%s))\n", b.Content)
+	fmt.Fprintf(buf, "c.Write(Escape(%s))\n", b.Content)
 	return nil
 }
 
@@ -211,7 +208,7 @@ type WriteBlock struct {
 }
 
 func (b *WriteBlock) write(buf *bytes.Buffer) error {
-	fmt.Fprintf(buf, "w.Write(%s)\n", b.Content)
+	fmt.Fprintf(buf, "c.Write(%s)\n", b.Content)
 	return nil
 }
 
@@ -303,8 +300,6 @@ func (p *Package) writeHeader(w io.Writer) error {
 	// Write deduped imports.
 	var decls = map[string]bool{`:"fmt"`: true, `:"io"`: true}
 	fmt.Fprint(&buf, "import (\n")
-	fmt.Fprintln(&buf, `"bytes"`)
-	fmt.Fprintln(&buf, `"io"`)
 	for _, d := range f.Decls {
 		d, ok := d.(*ast.GenDecl)
 		if !ok || d.Tok != token.IMPORT {
