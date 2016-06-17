@@ -3,19 +3,27 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/tav/ego"
 	"go/scanner"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/tav/ego"
 )
 
 func main() {
 	outfile := flag.String("o", "ego.go", "output file")
 	pkgname := flag.String("package", "", "package name")
+	version := flag.Bool("v", false, "output version info")
 	flag.Parse()
 	log.SetFlags(0)
+
+	// If version flag is set, spit out version info.
+	if *version {
+		fmt.Println("ego: 2016-06-16.tav")
+		os.Exit(0)
+	}
 
 	// If no paths are provided then use the present working directory.
 	roots := flag.Args()
