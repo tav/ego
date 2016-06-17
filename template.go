@@ -44,24 +44,6 @@ func (t *Template) Write(w io.Writer) error {
 	// Write function closing brace.
 	fmt.Fprint(buf, "}\n\n")
 
-	split := strings.SplitN(strings.TrimSpace(decl.Content), "(", 2)
-	fname := strings.TrimSpace(strings.SplitN(split[0], "func ", 2)[1])
-	args := split[1][:len(split[1])-1]
-	argList := strings.Split(args, ",")
-
-	params := []string{}
-	for _, param := range argList {
-		params = append(params, strings.Split(strings.TrimSpace(param), " ")[0])
-	}
-	argNames := strings.Join(params, ",")
-
-	fmt.Fprintf(buf, "func Render%s (%s) []byte {\n", fname, args)
-	fmt.Fprint(buf, "c.UseBuffer(true)\n")
-	fmt.Fprintf(buf, "%s(%s)\n", fname, argNames)
-	fmt.Fprint(buf, "c.UseBuffer(false)\n")
-	fmt.Fprint(buf, "return c.Buffer.Bytes()\n")
-	fmt.Fprint(buf, "}\n\n")
-
 	// Write code to external writer.
 	_, err := buf.WriteTo(w)
 	return err
@@ -298,7 +280,7 @@ func (p *Package) writeHeader(w io.Writer) error {
 	fmt.Fprintf(&buf, "package %s\n", p.Name)
 
 	// Write deduped imports.
-	var decls = map[string]bool{`:"fmt"`: true, `:"io"`: true}
+	var decls = map[string]bool{}
 	fmt.Fprint(&buf, "import (\n")
 	for _, d := range f.Decls {
 		d, ok := d.(*ast.GenDecl)
